@@ -31,7 +31,8 @@ def download(url):
     return data
 
 re_clean = re.compile(r'<[^>]+>')
-clean = lambda x: re_clean.sub('', x)
+re_spaces = re.compile(r'(&nbsp;|\s)+')
+clean = lambda x: re_spaces.sub(' ', re_clean.sub('', x)).strip().replace("&amp;", "&")
 
 re_nextPage = re.compile(r'<a href="([^"]+)">Suivant &gt;</a>', re.I)
 re_title = re.compile(r'<a href="(/animes/detail/[^"]+)">(.*)</td></tr>', re.I)
@@ -40,12 +41,15 @@ re_id = re.compile(r'/animes/(?:epis|staff)/id_([^._]+)[._]', re.I)
 re_scorePic = re.compile(r'<img src="/animes/([^.]+)\.png"', re.I)
 re_idSure = re.compile(r'name="id_serie_note" value="([^"]+)"', re.I)
 
+gdint = lambda i: int(i) if i else None
+arrType = lambda v: v.replace("é","É").strip("] [").split("] [")
+
 def addScorePic(anime, _id):
     if _id == None:
         return
     anime["animekaId"] = _id
-    anime["scoresPic"] = "http://animeka.com/animes/%s.png" % _id if _id else ""
-    download(anime["scoresPic"])
+    anime["scorePic"] = "http://animeka.com/animes/%s.png" % _id if _id else ""
+    download(anime["scorePic"])
     img = os.path.join('.cache', '%s.png' % _id)
     try:
         anime["votes"] = int(process_img_zone(img, 55, 5, 100, 20))
@@ -57,13 +61,13 @@ def addScorePic(anime, _id):
 animes = {}
 def saveOne(anime=None):
     if anime:
-        if "scoresPic" not in anime:
+        if "scorePic" not in anime:
             data = download(anime["url"])
             if '<td class="animestxt">Pas de note' in data:
                 addScorePic(anime, re_idSure.search(data).group(1))
             else:
                 addScorePic(anime, re_scorePic.search(data).group(1))
-        if "scoresPic" not in anime or not anime["animekaId"]:
+        if "scorePic" not in anime or not anime["animekaId"]:
             print >> sys.stderr, "WARNING: no pic for", anime["url"], "page", anime["source"]
         if anime["animekaId"] in animes:
             print >> sys.stderr, "WARNING: doublon", anime, animes[anime["animekaId"]]
@@ -92,7 +96,7 @@ def process(url):
                 curAnime["name"] = clean(anime.group(2))
             else:
                 print >> sys.stderr, "WARNING: anime line but no name/link", line
-        # get scores pic
+        # get score pic
         elif "/animes/staff/id_" in line or "/animes/epis/id_" in line:
             if "animekaId" in curAnime:
                 continue
@@ -101,6 +105,27 @@ def process(url):
         # get country
         elif "/_distiller/show_flag.php" in line:
             curAnime["country"] = re_country.search(line).group(1)
+        elif '<td class="animestxt">' in line:
+            line = clean(line)
+            if line.endswith(" :"):
+                key = line.rstrip(" :")
+                value = ""
+            else:
+                key, value = clean(line).split(' : ', 1)
+            if key == "TITRE ORIGINAL":
+                curAnime["name_original"] = value
+            elif key.endswith(" DE PRODUCTION"):
+                if " - " in value:
+                    curAnime["date_start"], curAnime["date_end"] = (gdint(v) for v in value.split(" - "))
+                else:
+                    curAnime["date_start"] = gdint(value)
+                    curAnime["date_end"] = gdint(value)
+            elif key.startswith("STUDIO"):
+                curAnime["studios"] = arrType(value)
+            elif key.startswith("GENRE"):
+                curAnime["categories"] = arrType(value)
+            elif key.startswith("AUTEUR"):
+                curAnime["authors"] = arrType(value)
     saveOne(curAnime)
     if nextPage:
         print "TOTAL", len(animes.keys())
@@ -113,13 +138,9 @@ if __name__ == "__main__":
     with open("data.json", 'w') as f:
         json.dump(animes, f)
 
-# FIX #PNG 9117 <> #ANIMES 9151
 # FIELDS
-# - studios
-# - genres
-# - auteurs
 # - format
 #  + episodes
 #  + format
-# EXTRACT NOTE + VOTERS FROM SCOREPICS
-
+#  + oavs
+#  + duree totale
