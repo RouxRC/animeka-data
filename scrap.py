@@ -40,8 +40,9 @@ re_country = re.compile(r'title="([^"]+)"', re.I)
 re_id = re.compile(r'/animes/(?:epis|staff)/id_([^._]+)[._]', re.I)
 re_scorePic = re.compile(r'<img src="/animes/([^.]+)\.png"', re.I)
 re_idSure = re.compile(r'name="id_serie_note" value="([^"]+)"', re.I)
+re_format = re.compile(r'^(\d+ )?(\S+)(?: (\d+) mins( \(en cours\))?)?$')
 
-gdint = lambda i: int(i) if i else None
+gdint = lambda i: int(i.strip()) if i else None
 arrType = lambda v: v.replace("é","É").strip("] [").split("] [")
 
 def addScorePic(anime, _id):
@@ -126,6 +127,18 @@ def process(url):
                 curAnime["categories"] = arrType(value)
             elif key.startswith("AUTEUR"):
                 curAnime["authors"] = arrType(value)
+            elif " DUR" in key:
+                if value == "Non sp&eacute;cifi&eacute;":
+                    continue
+                match = re_format.search(value)
+                curAnime["format"] = match.group(2).lower()
+                curAnime["episodes"] = gdint(match.group(1))
+                curAnime["duration"] = gdint(match.group(3))
+                try:
+                    curAnime["duration_global"] = curAnime["duration"] * curAnime["episodes"]
+                except:
+                    pass
+                curAnime["running"] = not not match.group(4)
     saveOne(curAnime)
     if nextPage:
         print "TOTAL", len(animes.keys())
@@ -135,12 +148,6 @@ def process(url):
 if __name__ == "__main__":
     process("http://animeka.com/animes/series/~_1.html")
     print "TOTAL", len(animes.keys())
-    with open("data.json", 'w') as f:
+    with open(os.path.join("data", "data.json"), 'w') as f:
         json.dump(animes, f)
 
-# FIELDS
-# - format
-#  + episodes
-#  + format
-#  + oavs
-#  + duree totale
