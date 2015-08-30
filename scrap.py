@@ -144,10 +144,35 @@ def process(url):
         print "TOTAL", len(animes.keys())
         process(nextPage)
 
+headers = [
+    "animekaId",
+    "name",
+    "score",
+    "votes",
+    "country",
+    "episodes",
+    "format",
+    "duration",
+    "duration_global",
+    "running",
+    "date_start",
+    "date_end",
+    "categories",
+    "studios",
+    "authors",
+    "name_original",
+    "url",
+    "source"
+]
+format_csv = lambda x: ('"%s"' % x.replace('"', '""') if ',' in x else x) if type(x) == unicode else format_csv("|".join(x)) if type(x) == list else format_csv(unicode(x))
+format_csvline = lambda x: ",".join([format_csv(x1) for x1 in x]).encode('utf-8')
 
 if __name__ == "__main__":
     process("http://animeka.com/animes/series/~_1.html")
     print "TOTAL", len(animes.keys())
     with open(os.path.join("data", "data.json"), 'w') as f:
         json.dump(animes, f)
-
+    with open(os.path.join("data", "data.csv"), 'w') as f:
+        print >> f, format_csvline(headers)
+        for a in animes.values():
+            print >> f, format_csvline([a[h] if h in a else "" for h in headers])
